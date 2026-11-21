@@ -397,16 +397,25 @@ def _sha256_of(path):
 
 
 def _verify_png(path):
-    from PIL import Image
+    """Check size and dimensions using only the standard library.
 
+    The PNG header (IHDR) carries the width and height in plain bytes,
+    so this works even on a machine without Pillow -- which is exactly
+    the situation the fallback copy path is for.
+    """
     size = os.path.getsize(path)
     if size > MAX_BYTES:
         raise RuntimeError(
             "entry.png is %d bytes, over the 1,048,576-byte cap" % size)
-    with Image.open(path) as shot:
-        if shot.size != (SIZE, SIZE):
-            raise RuntimeError(
-                "entry.png is %s, expected 1024x1024" % (shot.size,))
+    with open(path, "rb") as handle:
+        header = handle.read(33)
+    if len(header) < 33 or header[:8] != b"\x89PNG\r\n\x1a\n":
+        raise RuntimeError("entry.png is not a PNG file")
+    width = int.from_bytes(header[16:20], "big")
+    height = int.from_bytes(header[20:24], "big")
+    if (width, height) != (SIZE, SIZE):
+        raise RuntimeError(
+            "entry.png is %dx%d, expected 1024x1024" % (width, height))
     return size
 
 
